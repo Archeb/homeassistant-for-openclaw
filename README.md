@@ -24,28 +24,40 @@ An [OpenClaw](https://github.com/openclaw/openclaw) plugin that gives your AI ag
   3. Scroll to **Long-Lived Access Tokens**
   4. Click **Create Token**, give it a name (e.g. "OpenClaw"), copy the token
 
-### Step 1: Clone & Install
+### Step 1: Install the Plugin
+
+**Option A — From npm (recommended):**
 
 ```bash
+openclaw plugins install homeassistant-for-openclaw
+```
+
+**Option B — From local path (for development):**
+
+```bash
+# Clone the repo
 git clone https://github.com/Archeb/homeassistant-for-openclaw.git
 cd homeassistant-for-openclaw
-pnpm install    # or npm install
+pnpm install
+
+# Install from local directory
+openclaw plugins install ./
 ```
 
-### Step 2: Register the Plugin with OpenClaw
+After installing, enable the plugin:
 
 ```bash
-openclaw plugins install --local /path/to/homeassistant-for-openclaw
+openclaw config set plugins.homeassistant.enabled true
 ```
 
-### Step 3: Configure Connection
+### Step 2: Configure Connection
 
 ```bash
 openclaw config set plugins.homeassistant.url "http://YOUR_HA_IP:8123"
 openclaw config set plugins.homeassistant.token "YOUR_LONG_LIVED_TOKEN"
 ```
 
-### Step 4: Verify
+### Step 3: Verify
 
 Run `/ha` in any OpenClaw conversation. You should see:
 
@@ -61,7 +73,7 @@ Connected to **My Home** (HA 2025.x.x)
 Writable domains: none (read-only mode)
 ```
 
-### Step 5: Grant Write Access (Optional)
+### Step 4: Grant Write Access (Optional)
 
 By default the agent can only **read** entities. To let it control devices:
 
@@ -70,7 +82,7 @@ By default the agent can only **read** entities. To let it control devices:
 openclaw config set plugins.homeassistant.acl.writableDomains '["light","switch","climate"]'
 ```
 
-### Step 6: Block Sensitive Entities (Optional)
+### Step 5: Block Sensitive Entities (Optional)
 
 Hide entities from the agent entirely using glob patterns:
 
@@ -79,7 +91,7 @@ Hide entities from the agent entirely using glob patterns:
 openclaw config set plugins.homeassistant.acl.blockedEntities '["lock.*","alarm_control_panel.*"]'
 ```
 
-### Step 7: Let the Agent Help
+### Step 6: Let the Agent Help
 
 You can also just start a conversation and the agent will guide you through setup. The bundled skill file (`skills/homeassistant/SKILL.md`) teaches the agent how to:
 
