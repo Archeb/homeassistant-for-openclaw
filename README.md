@@ -123,6 +123,7 @@ All settings live under `plugins.entries.homeassistant-for-openclaw.config`:
 | `ha_call_service` | Call a HA service — ACL enforced |
 | `ha_logbook` | Read historical logbook entries |
 | `ha_context_config` | Adjust watched entities / context settings |
+| `ha_listen` | Trigger an agent turn when a watched entity changes (WIP, experimental, only supports Telegram) |
 
 ## Commands
 

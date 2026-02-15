@@ -252,9 +252,15 @@ export class HAListenerService {
                 `[ha-listener] triggered: ${entity_id} ${oldStateStr}→${newStateStr} → "${listener.message}"`,
             );
 
-            // Use `openclaw agent` CLI to trigger an actual agent turn
-            const escapedMessage = triggerText.replace(/'/g, "'\''");
-            const cmd = `openclaw agent --agent main --message '${escapedMessage}'`;
+            // Use `openclaw agent` CLI to trigger an actual agent turn.
+            // Resolve via process.argv — the Gateway itself is openclaw.
+            const ocBin = process.argv[1] ?? "openclaw";
+            const escapedMessage = triggerText.replace(/'/g, "'\\''");
+            const cmd = `"${process.execPath}" "${ocBin}" agent --agent main --message '${escapedMessage}' --deliver --channel telegram`;
+
+            this.config.logger.info(
+                `[ha-listener] exec: ${cmd.slice(0, 200)}...`,
+            );
 
             try {
                 exec(cmd, { timeout: 120_000 }, (err, stdout, stderr) => {
