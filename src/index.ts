@@ -12,7 +12,9 @@ import {
     createHaCallServiceToolDef,
     createHaLogbookToolDef,
     createHaContextConfigToolDef,
+    createHaWatchToolDef,
 } from "./tools.js";
+import { HAWatcherService } from "./ha-watcher-service.js";
 
 type PluginConfig = {
     url?: string;
@@ -124,6 +126,47 @@ export default function register(api: OpenClawPluginApi) {
             return textResult(await contextConfigToolDef.execute(params));
         },
     });
+
+    // ---- Tool: ha_watch ----
+    const watchToolDef = createHaWatchToolDef(stateDir, client);
+    api.registerTool({
+        name: watchToolDef.name,
+        label: "Home Assistant Event Watcher",
+        description: watchToolDef.description,
+        parameters: watchToolDef.inputSchema,
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+            return textResult(await watchToolDef.execute(params));
+        },
+    });
+
+    // ---- Service: HA watcher (WebSocket event subscription) ----
+    if (client.isConfigured) {
+        const watcherService = new HAWatcherService({
+            url: cfg.url ?? "",
+            token: cfg.token ?? "",
+            stateDir,
+            logger: {
+                info: (msg) => api.logger.info(msg),
+                warn: (msg) => api.logger.warn(msg),
+                error: (msg) => api.logger.error(msg),
+                debug: (msg) => api.logger.debug?.(msg),
+            },
+            enqueueSystemEvent: (text, opts) => {
+                api.runtime.system.enqueueSystemEvent(text, opts);
+            },
+            resolveSessionKey: () => {
+                // Use the configured session key, or fall back to "main"
+                const currentConfig = api.runtime.config.loadConfig();
+                return (currentConfig as Record<string, unknown>).sessionKey as string | undefined ?? "main";
+            },
+        });
+
+        api.registerService({
+            id: "ha-watcher",
+            start: async () => watcherService.start(),
+            stop: async () => watcherService.stop(),
+        });
+    }
 
     // ---- Command: /ha ----
     api.registerCommand({

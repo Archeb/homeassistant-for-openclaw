@@ -16,6 +16,7 @@ import {
 } from "./ha-client.js";
 import type { ContextConfig } from "./context-hook.js";
 import { readContextConfig, writeContextConfig, mergeContextConfig } from "./context-hook.js";
+import { addWatcher, removeWatcher, loadWatchers, formatWatcher } from "./watcher-store.js";
 
 type ToolSchema = {
     name: string;
@@ -218,6 +219,126 @@ export function createHaContextConfigToolDef(
             }
 
             return `Unknown action "${action}". Use: get, set, add_watch, remove_watch.`;
+        },
+    };
+}
+
+export function createHaWatchToolDef(stateDir: string, client: HAClient): ToolSchema {
+    return {
+        name: "ha_watch",
+        description:
+            "Manage Home Assistant event watchers. " +
+            "Watchers monitor entity state changes and trigger agent actions automatically. " +
+            "Actions:\n" +
+            "  - 'add': Create a new watcher. Requires entity_id and message. " +
+            "Set one_shot=true (default) for single-use tasks (e.g. 'when the light turns on, commit git'). " +
+            "Set one_shot=false for recurring watchers (e.g. 'always notify me when the door opens'). " +
+            "Decide based on the user's intent whether this is a one-time or recurring task.\n" +
+            "  - 'list': Show all active watchers.\n" +
+            "  - 'remove': Remove a watcher by its ID.",
+        inputSchema: {
+            type: "object",
+            required: ["action"],
+            properties: {
+                action: {
+                    type: "string",
+                    description: "One of: add, list, remove",
+                },
+                entity_id: {
+                    type: "string",
+                    description: "Entity to watch (e.g. 'light.bedroom'). Required for 'add'.",
+                },
+                to_state: {
+                    type: "string",
+                    description:
+                        "Only trigger when entity changes TO this state (e.g. 'on', 'off'). Optional.",
+                },
+                from_state: {
+                    type: "string",
+                    description:
+                        "Only trigger when entity changes FROM this state. Optional.",
+                },
+                message: {
+                    type: "string",
+                    description:
+                        "Message to inject into the agent when the watcher fires. " +
+                        "This becomes the agent's next task. Required for 'add'.",
+                },
+                one_shot: {
+                    type: "boolean",
+                    description:
+                        "If true (default), the watcher is removed after firing once. " +
+                        "If false, the watcher stays active and fires every time the condition is met. " +
+                        "Decide based on context: one-time tasks → true, recurring reactions → false.",
+                },
+                watcher_id: {
+                    type: "string",
+                    description: "Watcher ID to remove. Required for 'remove'.",
+                },
+            },
+        },
+        execute: async (params) => {
+            if (!client.isConfigured) {
+                return "Home Assistant is not configured.";
+            }
+
+            const action = params.action as string;
+
+            if (action === "add") {
+                const entityId = params.entity_id as string | undefined;
+                const message = params.message as string | undefined;
+                if (!entityId || !message) {
+                    return "Both entity_id and message are required for 'add'.";
+                }
+
+                // Validate entity exists
+                const entity = await client.getState(entityId);
+                if (!entity) {
+                    return `Entity "${entityId}" not found or is blocked by ACL. Check the entity_id.`;
+                }
+
+                const watcher = await addWatcher(stateDir, {
+                    entityId,
+                    toState: params.to_state as string | undefined,
+                    fromState: params.from_state as string | undefined,
+                    message,
+                    oneShot: (params.one_shot as boolean) ?? true,
+                });
+
+                const friendlyName =
+                    (entity.attributes?.friendly_name as string) ?? entityId;
+                const mode = watcher.oneShot ? "one-shot" : "recurring";
+                return (
+                    `✅ Watcher created (${mode}):\n` +
+                    `  ID: ${watcher.id}\n` +
+                    `  Entity: ${friendlyName} (\`${entityId}\`), current state: "${entity.state}"\n` +
+                    (watcher.toState ? `  Trigger when → "${watcher.toState}"\n` : "") +
+                    (watcher.fromState ? `  Trigger from "${watcher.fromState}" →\n` : "") +
+                    `  Message: ${watcher.message}`
+                );
+            }
+
+            if (action === "list") {
+                const watchers = await loadWatchers(stateDir);
+                if (watchers.length === 0) {
+                    return "No active watchers.";
+                }
+                return (
+                    `**${watchers.length} active watcher(s):**\n` +
+                    watchers.map(formatWatcher).join("\n")
+                );
+            }
+
+            if (action === "remove") {
+                const id = params.watcher_id as string | undefined;
+                if (!id) return "watcher_id is required for 'remove'.";
+                const removed = await removeWatcher(stateDir, id);
+                return removed
+                    ? `✅ Watcher ${id} removed.`
+                    : `Watcher "${id}" not found.`;
+            }
+
+            return `Unknown action "${action}". Use: add, list, remove.`;
         },
     };
 }

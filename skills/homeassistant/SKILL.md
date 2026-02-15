@@ -47,6 +47,23 @@ Adjust which entities are auto-injected into your context.
 - `max_entities`: cap for context injection
 - `group_by_area`: group entities by area
 
+### `ha_watch`
+Manage event watchers — monitor entity state changes and trigger agent actions automatically.
+- `action`: "add", "list", "remove"
+- `entity_id`: entity to watch (e.g. "light.bedroom"). Required for "add".
+- `to_state`: only trigger when entity changes TO this state (e.g. "on"). Optional.
+- `from_state`: only trigger when entity changes FROM this state. Optional.
+- `message`: the task to execute when the watcher fires. Required for "add".
+- `one_shot`: if true (default), watcher is removed after firing once. If false, it fires every time.
+  - **Decide based on user intent**: "when X happens, do Y" → one-shot. "whenever X happens, always do Y" → recurring.
+- `watcher_id`: ID of the watcher to remove. Required for "remove".
+
+**Example usage**: User says "Push the git when the bedroom light turns on"
+1. Use `ha_states` to find the entity ID for the bedroom light
+2. Call `ha_watch` with `action: "add"`, `entity_id: "light.bedroom"`, `to_state: "on"`, `message: "帮我提交 git"`, `one_shot: true`
+
+The watcher service connects to HA via WebSocket and monitors `state_changed` events in real-time. When a match occurs, the message is injected into the agent's next prompt.
+
 ## Bootstrap Flow
 
 When the user first asks about their smart home and HA is not configured:
