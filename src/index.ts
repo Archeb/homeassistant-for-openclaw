@@ -19,12 +19,12 @@ type PluginConfig = {
     token?: string;
     context?: {
         enabled?: boolean;
-        entityPatterns?: string[];
         maxEntities?: number;
         groupByArea?: boolean;
     };
     acl?: {
         blockedEntities?: string[];
+        watchedEntities?: string[];
         writableDomains?: string[];
     };
 };
@@ -58,7 +58,15 @@ export default function register(api: OpenClawPluginApi) {
 
         const stateDir = api.runtime.state.resolveStateDir();
         const agentOverrides = await readContextConfig(stateDir);
-        const contextConfig = mergeContextConfig(cfg.context, agentOverrides);
+        const contextConfig = mergeContextConfig(
+            {
+                enabled: cfg.context?.enabled,
+                watchedEntities: cfg.acl?.watchedEntities,
+                maxEntities: cfg.context?.maxEntities,
+                groupByArea: cfg.context?.groupByArea,
+            },
+            agentOverrides,
+        );
 
         const prependContext = await buildHomeContext(client, contextConfig);
         if (!prependContext) return;
@@ -129,8 +137,8 @@ export default function register(api: OpenClawPluginApi) {
                         "Home Assistant is not configured.\n\n" +
                         "Set the URL and token:\n" +
                         "```\n" +
-                        'openclaw config set plugins.homeassistant.url "http://YOUR_HA_URL:8123"\n' +
-                        'openclaw config set plugins.homeassistant.token "YOUR_TOKEN"\n' +
+                        'openclaw config set plugins.entries.homeassistant-for-openclaw.config.url "http://YOUR_HA_URL:8123"\n' +
+                        'openclaw config set plugins.entries.homeassistant-for-openclaw.config.token "YOUR_TOKEN"\n' +
                         "```\n\n" +
                         "To get a token: HA → Profile → Long-Lived Access Tokens → Create Token.",
                 };

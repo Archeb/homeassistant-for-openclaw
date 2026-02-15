@@ -42,7 +42,7 @@ export function createHaStatesToolDef(client: HAClient): ToolSchema {
         },
         execute: async (params) => {
             if (!client.isConfigured) {
-                return "Home Assistant is not configured. The user needs to set plugins.homeassistant.url and plugins.homeassistant.token.";
+                return "Home Assistant is not configured. The user needs to set plugins.entries.homeassistant-for-openclaw.config.url and .token.";
             }
 
             const entityId = params.entity_id as string | undefined;
@@ -153,7 +153,7 @@ export function createHaContextConfigToolDef(
         description:
             "View or modify what Home Assistant data is injected into your context. " +
             "Actions: 'get' (show current config), 'set' (replace config), " +
-            "'add_pattern'/'remove_pattern' (adjust entity patterns). " +
+            "'add_watch'/'remove_watch' (adjust watched entity patterns). " +
             "Changes take effect on the next message turn.",
         inputSchema: {
             type: "object",
@@ -161,12 +161,12 @@ export function createHaContextConfigToolDef(
             properties: {
                 action: {
                     type: "string",
-                    description: "One of: get, set, add_pattern, remove_pattern",
+                    description: "One of: get, set, add_watch, remove_watch",
                 },
-                entity_patterns: {
+                watched_entities: {
                     type: "array",
                     items: { type: "string" },
-                    description: "Entity patterns to set/add/remove",
+                    description: "Entity patterns to watch/unwatch (for context injection)",
                 },
                 enabled: { type: "boolean", description: "Enable or disable context injection" },
                 max_entities: { type: "integer", description: "Max entities to include in context" },
@@ -188,7 +188,7 @@ export function createHaContextConfigToolDef(
             if (action === "set") {
                 const updated: ContextConfig = {
                     enabled: (params.enabled as boolean) ?? current.enabled,
-                    entityPatterns: (params.entity_patterns as string[]) ?? current.entityPatterns,
+                    watchedEntities: (params.watched_entities as string[]) ?? current.watchedEntities,
                     maxEntities: (params.max_entities as number) ?? current.maxEntities,
                     groupByArea: (params.group_by_area as boolean) ?? current.groupByArea,
                 };
@@ -196,29 +196,28 @@ export function createHaContextConfigToolDef(
                 return `Context config updated:\n${JSON.stringify(updated, null, 2)}`;
             }
 
-            if (action === "add_pattern") {
-                const toAdd = (params.entity_patterns as string[]) ?? [];
+            if (action === "add_watch") {
+                const toAdd = (params.watched_entities as string[]) ?? [];
                 if (toAdd.length === 0) return "No patterns specified to add.";
-                const patterns = new Set(current.entityPatterns);
+                const patterns = new Set(current.watchedEntities);
                 for (const p of toAdd) patterns.add(p);
-                const updated: ContextConfig = { ...current, entityPatterns: [...patterns] };
+                const updated: ContextConfig = { ...current, watchedEntities: [...patterns] };
                 await writeContextConfig(stateDir, updated);
-                return `Added patterns. Current: ${updated.entityPatterns.join(", ")}`;
+                return `Added watched patterns. Current: ${updated.watchedEntities.join(", ")}`;
             }
 
-            if (action === "remove_pattern") {
-                const toRemove = new Set((params.entity_patterns as string[]) ?? []);
+            if (action === "remove_watch") {
+                const toRemove = new Set((params.watched_entities as string[]) ?? []);
                 if (toRemove.size === 0) return "No patterns specified to remove.";
                 const updated: ContextConfig = {
                     ...current,
-                    entityPatterns: current.entityPatterns.filter((p) => !toRemove.has(p)),
+                    watchedEntities: current.watchedEntities.filter((p) => !toRemove.has(p)),
                 };
-                if (updated.entityPatterns.length === 0) updated.entityPatterns = ["*"];
                 await writeContextConfig(stateDir, updated);
-                return `Removed patterns. Current: ${updated.entityPatterns.join(", ")}`;
+                return `Removed watched patterns. Current: ${updated.watchedEntities.length > 0 ? updated.watchedEntities.join(", ") : "(none — context injection disabled)"}`;
             }
 
-            return `Unknown action "${action}". Use: get, set, add_pattern, remove_pattern.`;
+            return `Unknown action "${action}". Use: get, set, add_watch, remove_watch.`;
         },
     };
 }

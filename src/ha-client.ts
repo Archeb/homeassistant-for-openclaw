@@ -219,7 +219,7 @@ export function formatEntityState(entity: HAEntity, includeLastChanged = false):
     const friendly = (entity.attributes.friendly_name as string) ?? entity.entity_id;
     const unit = (entity.attributes.unit_of_measurement as string) ?? "";
     const stateStr = unit ? `${entity.state} ${unit}` : entity.state;
-    let line = `- ${friendly}: ${stateStr}`;
+    let line = `- ${friendly} (\`${entity.entity_id}\`): ${stateStr}`;
     if (includeLastChanged) {
         const ago = formatTimeAgo(entity.last_changed);
         if (ago) line += ` (${ago})`;
@@ -290,7 +290,7 @@ export function formatEntitiesSummary(
     }
 
     if (entities.length > max) {
-        lines.push(`\n_...and ${entities.length - max} more entities (configure context.entityPatterns to narrow scope)_`);
+        lines.push(`\n_...and ${entities.length - max} more entities (configure acl.watchedEntities to narrow scope)_`);
     }
 
     return lines.join("\n");
@@ -302,8 +302,9 @@ export function formatLogbookEntries(entries: HALogbookEntry[]): string {
     const lines = entries.map((e) => {
         const time = new Date(e.when).toLocaleTimeString();
         const name = e.name ?? e.entity_id ?? "Unknown";
+        const id = e.entity_id ? ` (\`${e.entity_id}\`)` : "";
         const msg = e.message ?? e.state ?? "";
-        return `- [${time}] ${name}: ${msg}`;
+        return `- [${time}] ${name}${id}: ${msg}`;
     });
     return lines.join("\n");
 }

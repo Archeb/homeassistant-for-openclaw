@@ -4,11 +4,21 @@ An [OpenClaw](https://github.com/openclaw/openclaw) plugin that gives your AI ag
 
 ## Features
 
-- **Live context injection** — current sensor states are automatically prepended to agent conversations
+- **Live context injection** — watched entity states auto-prepended to agent conversations
 - **Device control** — agent can call HA services (lights, climate, switches, etc.) via tools
 - **Logbook access** — query historical events and device activity
-- **Safe defaults** — read-all, write-nothing; agent guides you through setup
-- **Configurable ACL** — block entities, whitelist writable domains
+- **Three-tier access** — readable / watched / writable, with safe defaults
+- **Entity IDs everywhere** — all output includes `entity_id` for precise reference
+
+---
+
+## Three-Tier Access Model
+
+| Tier | What it does | Config key | Default |
+|------|-------------|------------|---------|
+| **Readable** | Queryable via `ha_states` tool | `acl.blockedEntities` (inverse) | All entities |
+| **Watched** | Auto-injected into every conversation | `acl.watchedEntities` | None |
+| **Writable** | Can call services on these domains | `acl.writableDomains` | None |
 
 ---
 
@@ -17,36 +27,28 @@ An [OpenClaw](https://github.com/openclaw/openclaw) plugin that gives your AI ag
 ### Prerequisites
 
 - [OpenClaw](https://github.com/openclaw/openclaw) installed and running
-- A running Home Assistant instance (accessible via its HTTP API)
+- A running Home Assistant instance
 - A **Long-Lived Access Token** from Home Assistant:
-  1. Open your HA web UI
-  2. Click your profile (bottom-left)
-  3. Scroll to **Long-Lived Access Tokens**
-  4. Click **Create Token**, give it a name (e.g. "OpenClaw"), copy the token
+  1. Open your HA web UI → click your profile (bottom-left)
+  2. Scroll to **Long-Lived Access Tokens** → **Create Token**
 
 ### Step 1: Install the Plugin
 
-**Option A — From npm (recommended):**
+**From npm (recommended):**
 
 ```bash
 openclaw plugins install homeassistant-for-openclaw
 ```
 
-**Option B — From local path (for development):**
+**From local path (dev):**
 
 ```bash
-# Clone the repo
 git clone https://github.com/Archeb/homeassistant-for-openclaw.git
-cd homeassistant-for-openclaw
-pnpm install
-
-# Install from local directory
+cd homeassistant-for-openclaw && pnpm install
 openclaw plugins install ./
 ```
 
 ### Step 2: Configure Connection
-
-Plugin config lives under the path `plugins.entries.homeassistant-for-openclaw.config` in your OpenClaw config. Set the HA URL and token:
 
 ```bash
 openclaw config set plugins.entries.homeassistant-for-openclaw.config.url "http://YOUR_HA_IP:8123"
@@ -55,77 +57,50 @@ openclaw config set plugins.entries.homeassistant-for-openclaw.config.token "YOU
 
 ### Step 3: Verify
 
-Run `/ha` in any OpenClaw conversation. You should see:
+Run `/ha` in any OpenClaw conversation.
 
-```
-Connected to **My Home** (HA 2025.x.x)
+### Step 4: Add Watched Entities (Recommended)
 
-347 visible entities:
-  sensor: 79
-  switch: 34
-  light: 27
-  ...
-
-Writable domains: none (read-only mode)
-```
-
-### Step 4: Grant Write Access (Optional)
-
-By default the agent can only **read** entities. To let it control devices:
+By default, no entities are auto-injected into context. Add patterns for entities you care about:
 
 ```bash
-# Example: allow controlling lights, switches, and climate
-openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"writableDomains":["light","switch","climate"]}'
+# Watch all sensors and climate entities
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"watchedEntities":["sensor.*","climate.*"]}'
 ```
 
-### Step 5: Block Sensitive Entities (Optional)
-
-Hide entities from the agent entirely using glob patterns:
+### Step 5: Grant Write Access (Optional)
 
 ```bash
-# Example: hide all locks and alarm panels
+# Allow controlling lights, switches, and climate
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"watchedEntities":["sensor.*","climate.*"],"writableDomains":["light","switch","climate"]}'
+```
+
+### Step 6: Block Sensitive Entities (Optional)
+
+```bash
+# Hide locks and alarm panels entirely
 openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"blockedEntities":["lock.*","alarm_control_panel.*"]}'
 ```
-
-### Step 6: Let the Agent Help
-
-You can also just start a conversation and the agent will guide you through setup. The bundled skill file (`skills/homeassistant/SKILL.md`) teaches the agent how to:
-
-- Detect missing config and prompt you for URL/token
-- Discover your entities and show a summary
-- Ask which domains to make writable
-- Suggest entities to block
 
 ---
 
 ## Configuration Reference
 
-All settings live under `plugins.entries.homeassistant-for-openclaw.config` in your OpenClaw config:
+All settings live under `plugins.entries.homeassistant-for-openclaw.config`:
 
 ```jsonc
 {
-  "plugins": {
-    "entries": {
-      "homeassistant-for-openclaw": {
-        "enabled": true,
-        "config": {
-          "url": "http://homeassistant.local:8123",
-          "token": "eyJ...",
-
-          "context": {
-            "enabled": true,           // inject home status into agent context
-            "entityPatterns": ["*"],   // which entities to show (glob patterns)
-            "maxEntities": 50,         // cap to avoid overloading context window
-            "groupByArea": true        // group entities by HA area
-          },
-
-          "acl": {
-            "blockedEntities": [],     // glob patterns to hide entirely
-            "writableDomains": []      // domains the agent can control (empty = read-only)
-          }
-        }
-      }
-    }
+  "url": "http://homeassistant.local:8123",
+  "token": "eyJ...",
+  "context": {
+    "enabled": true,       // enable auto-injection of watched entities
+    "maxEntities": 50,     // cap to avoid overloading context window
+    "groupByArea": true    // group entities by HA area
+  },
+  "acl": {
+    "blockedEntities": [],   // glob patterns to hide entirely
+    "watchedEntities": [],   // glob patterns to auto-inject into context
+    "writableDomains": []    // domains the agent can control
   }
 }
 ```
@@ -134,19 +109,20 @@ All settings live under `plugins.entries.homeassistant-for-openclaw.config` in y
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `blockedEntities` | `[]` | Entities matching these patterns are invisible to the agent |
-| `writableDomains` | `[]` | Only listed domains allow service calls |
+| `blockedEntities` | `[]` | Entities matching these patterns are invisible |
+| `watchedEntities` | `[]` | Only these entities appear in automatic context |
+| `writableDomains` | `[]` | Only these domains allow service calls |
 
-> `blockedEntities` takes precedence — a blocked entity cannot be read or written, even if its domain is in `writableDomains`.
+> `blockedEntities` takes precedence — a blocked entity is always invisible.
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
-| `ha_states` | Query entity states (filter by domain, entity_id, or glob pattern) |
-| `ha_call_service` | Call a HA service (e.g. `light.turn_on`) — ACL enforced |
-| `ha_logbook` | Read historical logbook entries for a time range |
-| `ha_context_config` | Adjust what sensor data is injected into agent context |
+| `ha_states` | Query entity states (all readable entities) |
+| `ha_call_service` | Call a HA service — ACL enforced |
+| `ha_logbook` | Read historical logbook entries |
+| `ha_context_config` | Adjust watched entities / context settings |
 
 ## Commands
 
@@ -158,11 +134,7 @@ All settings live under `plugins.entries.homeassistant-for-openclaw.config` in y
 
 ```bash
 pnpm install
-pnpm run typecheck       # TypeScript type check
-pnpm test                # Run all tests
-
-# For integration tests against a live HA instance:
-# Create .env with HA_URL and HA_TOKEN, then:
+pnpm run typecheck
 pnpm test
 ```
 

@@ -1,88 +1,69 @@
 ---
 name: homeassistant
-description: Query and control Home Assistant smart home devices, view sensor data, and read historical logs.
-version: 0.1.0
-license: Apache-2.0
-metadata:
-  openclaw:
-    emoji: "🏠"
+description: Guide for interacting with Home Assistant via the HA plugin tools
 ---
 
 # Home Assistant Integration
 
-You have live access to a Home Assistant instance through this plugin. A summary of current entity states is automatically injected into your context at the start of each conversation turn.
+You have access to Home Assistant tools for querying and controlling smart home devices.
+
+## Three-Tier Access Model
+
+| Tier | What it does | Config key |
+|------|-------------|------------|
+| **Readable** | All non-blocked entities — queryable via `ha_states` | `acl.blockedEntities` (inverse) |
+| **Watched** | Auto-injected into every conversation context | `acl.watchedEntities` |
+| **Writable** | Can call services (turn_on, turn_off, etc.) | `acl.writableDomains` |
+
+- **Default:** All entities are readable, none are watched, none are writable.
+- Entity output always includes `entity_id` for precise reference.
 
 ## Available Tools
 
-| Tool | Purpose |
-|------|---------|
-| `ha_states` | Query current entity states (filter by domain, entity_id, or pattern) |
-| `ha_call_service` | Control devices (turn on/off lights, adjust climate, etc.) |
-| `ha_logbook` | Read historical event logs for a time range |
-| `ha_context_config` | Adjust what sensor data is injected into your context |
+### `ha_states`
+Query entity states. All readable (non-blocked) entities accessible.
+- `domain`: filter by domain (e.g. "sensor", "light")
+- `entity_id`: get a specific entity
+- `pattern`: glob pattern (e.g. "sensor.living_room_*")
 
-## Bootstrap / First-Run Setup
+### `ha_call_service`
+Control a device. Requires domain to be in `writableDomains`.
+- `domain`: e.g. "light"
+- `service`: e.g. "turn_on", "turn_off", "toggle"
+- `entity_id`: target entity
+- `data`: optional extra data (brightness, temperature, etc.)
 
-If Home Assistant is **not yet configured** (no URL or token set):
+### `ha_logbook`
+Read historical events.
+- `start_time`: ISO 8601 (required)
+- `end_time`: ISO 8601 (optional)
+- `entity_id`: filter to one entity (recommended)
 
-1. Tell the user they need to provide their Home Assistant URL and a Long-Lived Access Token
-2. Guide them: **HA web UI → Profile (bottom-left) → Long-Lived Access Tokens → Create Token**
-3. They can configure it via:
+### `ha_context_config`
+Adjust which entities are auto-injected into your context.
+- `action`: "get", "set", "add_watch", "remove_watch"
+- `watched_entities`: glob patterns for entities to watch
+- `enabled`: enable/disable auto-injection
+- `max_entities`: cap for context injection
+- `group_by_area`: group entities by area
+
+## Bootstrap Flow
+
+When the user first asks about their smart home and HA is not configured:
+
+1. **Ask for URL + Token**: "I need your Home Assistant URL (e.g. http://ha.local:8123) and a Long-Lived Access Token. You can create one in HA → Profile → Long-Lived Access Tokens."
+2. **Guide config**: Tell them to run:
    ```
-   openclaw config set plugins.homeassistant.url "http://YOUR_HA:8123"
-   openclaw config set plugins.homeassistant.token "YOUR_TOKEN"
+   openclaw config set plugins.entries.homeassistant-for-openclaw.config.url "http://..."
+   openclaw config set plugins.entries.homeassistant-for-openclaw.config.token "..."
    ```
-4. Once configured, use `ha_states` to discover all available entities
-5. Present a summary to the user and ask:
-   - "Would you like me to block any entities from my view?" (privacy/security)
-   - "Which device domains should I be able to control?" (lights, switches, climate, etc.)
-6. Use `ha_context_config` to persist their preferences
-
-## Access Control
-
-- **Read access**: All entities are readable by default
-- **Write access**: No domains are writable by default — the user must explicitly enable domains
-- **Blocked entities**: Entities matching `acl.blockedEntities` patterns are completely invisible
-
-When the user grants write access, they can do:
-```
-openclaw config set plugins.homeassistant.acl.writableDomains '["light","switch","climate"]'
-```
+3. **Discover entities**: Use `ha_states` to survey what's available.
+4. **Suggest watched entities**: "I found sensors in your living room and bedroom. Want me to add these to your watched entities so I always know the status?"
+5. **Suggest writable domains**: "Want me to be able to control lights and switches? You'd need to add them to writableDomains."
 
 ## Safety Rules
 
-1. **Always confirm** with the user before:
-   - Disabling security devices (locks, alarms, cameras)
-   - Making changes to climate/heating that affect comfort
-   - Running automations that control multiple devices
-2. If a service call is **denied by ACL**, tell the user which domain needs to be added to `writableDomains`
-3. For bulk operations (e.g. "turn off all lights"), list what will be affected and confirm first
-4. Never call services on entities you haven't verified exist via `ha_states` first
-
-## Common Patterns
-
-**Check room status:**
-```
-Use ha_states with domain="sensor" or pattern="sensor.living_room_*"
-```
-
-**Toggle a light:**
-```
-Use ha_call_service with domain="light", service="toggle", entity_id="light.living_room"
-```
-
-**Review recent activity:**
-```
-Use ha_logbook with start_time (ISO 8601, e.g. 30 minutes ago) and optionally entity_id
-```
-
-**Adjust context scope:**
-```
-Use ha_context_config with action="set" and entity_patterns=["sensor.*", "climate.*"]
-```
-
-## Reading the Injected Context
-
-At the start of your context, you may see a `## 🏠 Home Status (live)` section. This contains current states of entities matching the configured patterns. Use this for situational awareness — e.g., answering "is it cold inside?" without needing a tool call.
-
-If the user asks about the home and the answer is in the injected context, respond directly. Only use `ha_states` when you need more detail or the context doesn't cover the specific entity.
+1. **Always confirm** before calling services that could affect security (locks, alarms, garage doors)
+2. **Describe what you'll do** before calling any service
+3. **Never guess entity IDs** — always query first with `ha_states`
+4. If a service call fails with an ACL error, explain to the user how to grant access

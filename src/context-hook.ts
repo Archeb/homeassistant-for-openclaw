@@ -2,8 +2,8 @@
  * Context injection hook.
  *
  * Registers `before_agent_start` to prepend live Home Assistant sensor data
- * into the agent's context. Respects agent-configurable overrides stored
- * in the plugin state directory.
+ * into the agent's context. Only "watched" entities appear in the automatic
+ * context injection; all readable entities remain available via ha_states.
  */
 
 import fs from "node:fs/promises";
@@ -13,7 +13,7 @@ import { formatEntitiesSummary, matchesAnyPattern } from "./ha-client.js";
 
 export type ContextConfig = {
     enabled: boolean;
-    entityPatterns: string[];
+    watchedEntities: string[];
     maxEntities: number;
     groupByArea: boolean;
 };
@@ -28,10 +28,11 @@ export async function readContextConfig(stateDir: string): Promise<ContextConfig
     const configPath = resolveContextConfigPath(stateDir);
     try {
         const raw = await fs.readFile(configPath, "utf8");
-        const parsed = JSON.parse(raw) as Partial<ContextConfig>;
+        const parsed = JSON.parse(raw) as Partial<ContextConfig & { entityPatterns?: string[] }>;
         return {
             enabled: parsed.enabled ?? true,
-            entityPatterns: parsed.entityPatterns ?? ["*"],
+            // Support legacy entityPatterns field as fallback
+            watchedEntities: parsed.watchedEntities ?? parsed.entityPatterns ?? [],
             maxEntities: parsed.maxEntities ?? 50,
             groupByArea: parsed.groupByArea ?? true,
         };
@@ -51,7 +52,7 @@ export async function writeContextConfig(
 
 export type PluginContextOptions = {
     enabled?: boolean;
-    entityPatterns?: string[];
+    watchedEntities?: string[];
     maxEntities?: number;
     groupByArea?: boolean;
 };
@@ -63,7 +64,7 @@ export function mergeContextConfig(
 ): ContextConfig {
     return {
         enabled: agentOverrides?.enabled ?? userConfig?.enabled ?? true,
-        entityPatterns: agentOverrides?.entityPatterns ?? userConfig?.entityPatterns ?? ["*"],
+        watchedEntities: agentOverrides?.watchedEntities ?? userConfig?.watchedEntities ?? [],
         maxEntities: agentOverrides?.maxEntities ?? userConfig?.maxEntities ?? 50,
         groupByArea: agentOverrides?.groupByArea ?? userConfig?.groupByArea ?? true,
     };
@@ -76,12 +77,15 @@ export async function buildHomeContext(
 ): Promise<string | null> {
     if (!config.enabled || !client.isConfigured) return null;
 
+    // If no watchedEntities configured, skip automatic context injection
+    const patterns = config.watchedEntities;
+    if (patterns.length === 0) return null;
+
     try {
         let entities = await client.getStates();
 
-        // Apply context-specific entity patterns (agent may narrow this)
-        const patterns = config.entityPatterns;
-        if (patterns.length > 0 && !(patterns.length === 1 && patterns[0] === "*")) {
+        // Filter to only watched entities
+        if (!(patterns.length === 1 && patterns[0] === "*")) {
             entities = entities.filter((e) => matchesAnyPattern(e.entity_id, patterns));
         }
 

@@ -59,9 +59,10 @@ describe("formatEntityState", () => {
         last_updated: new Date().toISOString(),
     };
 
-    it("formats entity with unit", () => {
+    it("formats entity with unit and entity_id", () => {
         const result = formatEntityState(entity);
         expect(result).toContain("Living Room Temp");
+        expect(result).toContain("`sensor.temperature`");
         expect(result).toContain("24.5 °C");
     });
 
@@ -127,6 +128,7 @@ describe("formatLogbookEntries", () => {
         ];
         const result = formatLogbookEntries(entries);
         expect(result).toContain("Living Light");
+        expect(result).toContain("`light.living`");
         expect(result).toContain("on");
     });
 

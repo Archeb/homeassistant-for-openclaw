@@ -2,7 +2,7 @@
     "id": "homeassistant-for-openclaw",
     "name": "Home Assistant",
     "description": "Home Assistant integration: live sensor context injection, entity control, and logbook access.",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "skills": [
         "skills/homeassistant"
     ],
@@ -25,15 +25,6 @@
                         "type": "boolean",
                         "default": true
                     },
-                    "entityPatterns": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "default": [
-                            "*"
-                        ]
-                    },
                     "maxEntities": {
                         "type": "integer",
                         "default": 50
@@ -52,14 +43,24 @@
                         "items": {
                             "type": "string"
                         },
-                        "default": []
+                        "default": [],
+                        "description": "Glob patterns to hide entities entirely from the agent"
+                    },
+                    "watchedEntities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "description": "Glob patterns for entities to auto-inject into context. Empty = no auto-injection."
                     },
                     "writableDomains": {
                         "type": "array",
                         "items": {
                             "type": "string"
                         },
-                        "default": []
+                        "default": [],
+                        "description": "Domains the agent can call services on (empty = read-only)"
                     }
                 }
             }
