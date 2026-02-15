@@ -1,8 +1,8 @@
 {
-    "id": "homeassistant",
+    "id": "homeassistant-for-openclaw",
     "name": "Home Assistant",
     "description": "Home Assistant integration: live sensor context injection, entity control, and logbook access.",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "skills": [
         "skills/homeassistant"
     ],

@@ -44,17 +44,13 @@ pnpm install
 openclaw plugins install ./
 ```
 
-After installing, enable the plugin:
-
-```bash
-openclaw config set plugins.homeassistant.enabled true
-```
-
 ### Step 2: Configure Connection
 
+Plugin config lives under the path `plugins.entries.homeassistant-for-openclaw.config` in your OpenClaw config. Set the HA URL and token:
+
 ```bash
-openclaw config set plugins.homeassistant.url "http://YOUR_HA_IP:8123"
-openclaw config set plugins.homeassistant.token "YOUR_LONG_LIVED_TOKEN"
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.url "http://YOUR_HA_IP:8123"
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.token "YOUR_LONG_LIVED_TOKEN"
 ```
 
 ### Step 3: Verify
@@ -79,7 +75,7 @@ By default the agent can only **read** entities. To let it control devices:
 
 ```bash
 # Example: allow controlling lights, switches, and climate
-openclaw config set plugins.homeassistant.acl.writableDomains '["light","switch","climate"]'
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"writableDomains":["light","switch","climate"]}'
 ```
 
 ### Step 5: Block Sensitive Entities (Optional)
@@ -88,7 +84,7 @@ Hide entities from the agent entirely using glob patterns:
 
 ```bash
 # Example: hide all locks and alarm panels
-openclaw config set plugins.homeassistant.acl.blockedEntities '["lock.*","alarm_control_panel.*"]'
+openclaw config set plugins.entries.homeassistant-for-openclaw.config.acl '{"blockedEntities":["lock.*","alarm_control_panel.*"]}'
 ```
 
 ### Step 6: Let the Agent Help
@@ -104,23 +100,32 @@ You can also just start a conversation and the agent will guide you through setu
 
 ## Configuration Reference
 
-All settings live under `plugins.homeassistant` in your OpenClaw config:
+All settings live under `plugins.entries.homeassistant-for-openclaw.config` in your OpenClaw config:
 
 ```jsonc
 {
-  "url": "http://homeassistant.local:8123",
-  "token": "eyJ...",
+  "plugins": {
+    "entries": {
+      "homeassistant-for-openclaw": {
+        "enabled": true,
+        "config": {
+          "url": "http://homeassistant.local:8123",
+          "token": "eyJ...",
 
-  "context": {
-    "enabled": true,           // inject home status into agent context
-    "entityPatterns": ["*"],   // which entities to show (glob patterns)
-    "maxEntities": 50,         // cap to avoid overloading context window
-    "groupByArea": true        // group entities by HA area
-  },
+          "context": {
+            "enabled": true,           // inject home status into agent context
+            "entityPatterns": ["*"],   // which entities to show (glob patterns)
+            "maxEntities": 50,         // cap to avoid overloading context window
+            "groupByArea": true        // group entities by HA area
+          },
 
-  "acl": {
-    "blockedEntities": [],     // glob patterns to hide entirely
-    "writableDomains": []      // domains the agent can control (empty = read-only)
+          "acl": {
+            "blockedEntities": [],     // glob patterns to hide entirely
+            "writableDomains": []      // domains the agent can control (empty = read-only)
+          }
+        }
+      }
+    }
   }
 }
 ```
@@ -158,7 +163,7 @@ pnpm test                # Run all tests
 
 # For integration tests against a live HA instance:
 # Create .env with HA_URL and HA_TOKEN, then:
-source .env && HA_URL="$HA_URL" HA_TOKEN="$HA_TOKEN" pnpm test
+pnpm test
 ```
 
 ## License
