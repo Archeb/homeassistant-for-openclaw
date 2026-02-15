@@ -9,6 +9,7 @@
  */
 
 import { loadListeners, matchesListener, saveListeners } from "./listener-store.js";
+import { exec } from "node:child_process";
 
 // ---- Types ----
 
@@ -19,10 +20,6 @@ type Logger = {
     debug?: (msg: string) => void;
 };
 
-type EnqueueSystemEvent = (text: string, options: { sessionKey: string }) => void;
-
-type ResolveSessionKey = () => string | undefined;
-
 export type ListenerServiceConfig = {
     /** HA base URL (http://...) */
     url: string;
@@ -32,10 +29,6 @@ export type ListenerServiceConfig = {
     stateDir: string;
     /** Logger */
     logger: Logger;
-    /** Function to inject a system event into the agent session */
-    enqueueSystemEvent: EnqueueSystemEvent;
-    /** Function to resolve the current default session key */
-    resolveSessionKey: ResolveSessionKey;
 };
 
 // ---- HA WebSocket Protocol Types ----
@@ -245,14 +238,6 @@ export class HAListenerService {
 
         if (matched.length === 0) return;
 
-        const sessionKey = this.config.resolveSessionKey();
-        if (!sessionKey) {
-            this.config.logger.warn(
-                `[ha-listener] listener matched for ${entity_id} but no sessionKey available`,
-            );
-            return;
-        }
-
         // Get friendly name for context
         const friendlyName =
             (new_state.attributes?.friendly_name as string) ?? entity_id;
@@ -267,11 +252,25 @@ export class HAListenerService {
                 `[ha-listener] triggered: ${entity_id} ${oldStateStr}→${newStateStr} → "${listener.message}"`,
             );
 
+            // Use `openclaw agent` CLI to trigger an actual agent turn
+            const escapedMessage = triggerText.replace(/'/g, "'\''");
+            const cmd = `openclaw agent --agent main --message '${escapedMessage}'`;
+
             try {
-                this.config.enqueueSystemEvent(triggerText, { sessionKey });
+                exec(cmd, { timeout: 120_000 }, (err, stdout, stderr) => {
+                    if (err) {
+                        this.config.logger.error(
+                            `[ha-listener] openclaw agent failed: ${String(err)}${stderr ? ` stderr: ${stderr}` : ""}`,
+                        );
+                    } else {
+                        this.config.logger.info(
+                            `[ha-listener] openclaw agent completed for ${entity_id}`,
+                        );
+                    }
+                });
             } catch (err) {
                 this.config.logger.error(
-                    `[ha-listener] failed to enqueue system event: ${String(err)}`,
+                    `[ha-listener] failed to exec openclaw agent: ${String(err)}`,
                 );
             }
         }

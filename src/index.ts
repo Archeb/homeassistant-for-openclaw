@@ -151,14 +151,6 @@ export default function register(api: OpenClawPluginApi) {
                 error: (msg) => api.logger.error(msg),
                 debug: (msg) => api.logger.debug?.(msg),
             },
-            enqueueSystemEvent: (text, opts) => {
-                api.runtime.system.enqueueSystemEvent(text, opts);
-            },
-            resolveSessionKey: () => {
-                // Use the configured session key, or fall back to "main"
-                const currentConfig = api.runtime.config.loadConfig();
-                return (currentConfig as Record<string, unknown>).sessionKey as string | undefined ?? "main";
-            },
         });
 
         api.registerService({
