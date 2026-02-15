@@ -12,9 +12,9 @@ import {
     createHaCallServiceToolDef,
     createHaLogbookToolDef,
     createHaContextConfigToolDef,
-    createHaWatchToolDef,
+    createHaListenToolDef,
 } from "./tools.js";
-import { HAWatcherService } from "./ha-watcher-service.js";
+import { HAListenerService } from "./ha-listener-service.js";
 
 type PluginConfig = {
     url?: string;
@@ -127,21 +127,21 @@ export default function register(api: OpenClawPluginApi) {
         },
     });
 
-    // ---- Tool: ha_watch ----
-    const watchToolDef = createHaWatchToolDef(stateDir, client);
+    // ---- Tool: ha_listen ----
+    const listenToolDef = createHaListenToolDef(stateDir, client);
     api.registerTool({
-        name: watchToolDef.name,
-        label: "Home Assistant Event Watcher",
-        description: watchToolDef.description,
-        parameters: watchToolDef.inputSchema,
+        name: listenToolDef.name,
+        label: "Home Assistant Event Listener",
+        description: listenToolDef.description,
+        parameters: listenToolDef.inputSchema,
         async execute(_toolCallId: string, params: Record<string, unknown>) {
-            return textResult(await watchToolDef.execute(params));
+            return textResult(await listenToolDef.execute(params));
         },
     });
 
-    // ---- Service: HA watcher (WebSocket event subscription) ----
+    // ---- Service: HA listener (WebSocket event subscription) ----
     if (client.isConfigured) {
-        const watcherService = new HAWatcherService({
+        const listenerService = new HAListenerService({
             url: cfg.url ?? "",
             token: cfg.token ?? "",
             stateDir,
@@ -162,9 +162,9 @@ export default function register(api: OpenClawPluginApi) {
         });
 
         api.registerService({
-            id: "ha-watcher",
-            start: async () => watcherService.start(),
-            stop: async () => watcherService.stop(),
+            id: "ha-listener",
+            start: async () => listenerService.start(),
+            stop: async () => listenerService.stop(),
         });
     }
 

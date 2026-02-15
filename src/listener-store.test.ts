@@ -1,5 +1,5 @@
 /**
- * Unit tests for watcher store: CRUD operations and state-change matching.
+ * Unit tests for listener store: CRUD operations and state-change matching.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -7,21 +7,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import {
-    loadWatchers,
-    saveWatchers,
-    addWatcher,
-    removeWatcher,
-    matchesWatcher,
-    formatWatcher,
-    resolveWatchersPath,
-    type Watcher,
-} from "./watcher-store.js";
+    loadListeners,
+    saveListeners,
+    addListener,
+    removeListener,
+    matchesListener,
+    formatListener,
+    resolveListenersPath,
+    type Listener,
+} from "./listener-store.js";
 
 // Use a temp dir for each test to avoid cross-test contamination
 let tmpDir: string;
 
 beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ha-watcher-test-"));
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ha-listener-test-"));
 });
 
 afterEach(async () => {
@@ -30,32 +30,32 @@ afterEach(async () => {
 
 // ---- CRUD tests ----
 
-describe("loadWatchers", () => {
+describe("loadListeners", () => {
     it("returns empty array when file does not exist", async () => {
-        const watchers = await loadWatchers(tmpDir);
-        expect(watchers).toEqual([]);
+        const listeners = await loadListeners(tmpDir);
+        expect(listeners).toEqual([]);
     });
 
     it("returns empty array for invalid JSON", async () => {
-        const filePath = resolveWatchersPath(tmpDir);
+        const filePath = resolveListenersPath(tmpDir);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, "not json", "utf8");
-        const watchers = await loadWatchers(tmpDir);
-        expect(watchers).toEqual([]);
+        const listeners = await loadListeners(tmpDir);
+        expect(listeners).toEqual([]);
     });
 
     it("returns empty array for non-array JSON", async () => {
-        const filePath = resolveWatchersPath(tmpDir);
+        const filePath = resolveListenersPath(tmpDir);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, '{"foo": 1}', "utf8");
-        const watchers = await loadWatchers(tmpDir);
-        expect(watchers).toEqual([]);
+        const listeners = await loadListeners(tmpDir);
+        expect(listeners).toEqual([]);
     });
 });
 
-describe("saveWatchers / loadWatchers roundtrip", () => {
-    it("persists and reads back watchers", async () => {
-        const watchers: Watcher[] = [
+describe("saveListeners / loadListeners roundtrip", () => {
+    it("persists and reads back listeners", async () => {
+        const listeners: Listener[] = [
             {
                 id: "abc",
                 entityId: "light.bedroom",
@@ -65,76 +65,76 @@ describe("saveWatchers / loadWatchers roundtrip", () => {
                 createdAt: "2026-01-01T00:00:00Z",
             },
         ];
-        await saveWatchers(tmpDir, watchers);
-        const loaded = await loadWatchers(tmpDir);
-        expect(loaded).toEqual(watchers);
+        await saveListeners(tmpDir, listeners);
+        const loaded = await loadListeners(tmpDir);
+        expect(loaded).toEqual(listeners);
     });
 });
 
-describe("addWatcher", () => {
-    it("adds a watcher and assigns an id", async () => {
-        const watcher = await addWatcher(tmpDir, {
+describe("addListener", () => {
+    it("adds a listener and assigns an id", async () => {
+        const listener = await addListener(tmpDir, {
             entityId: "light.bedroom",
             toState: "on",
             message: "commit git",
             oneShot: true,
         });
-        expect(watcher.id).toBeDefined();
-        expect(watcher.entityId).toBe("light.bedroom");
-        expect(watcher.createdAt).toBeDefined();
+        expect(listener.id).toBeDefined();
+        expect(listener.entityId).toBe("light.bedroom");
+        expect(listener.createdAt).toBeDefined();
 
-        const loaded = await loadWatchers(tmpDir);
+        const loaded = await loadListeners(tmpDir);
         expect(loaded.length).toBe(1);
-        expect(loaded[0]!.id).toBe(watcher.id);
+        expect(loaded[0]!.id).toBe(listener.id);
     });
 
-    it("appends to existing watchers", async () => {
-        await addWatcher(tmpDir, {
+    it("appends to existing listeners", async () => {
+        await addListener(tmpDir, {
             entityId: "light.a",
             message: "task a",
             oneShot: true,
         });
-        await addWatcher(tmpDir, {
+        await addListener(tmpDir, {
             entityId: "light.b",
             message: "task b",
             oneShot: false,
         });
-        const loaded = await loadWatchers(tmpDir);
+        const loaded = await loadListeners(tmpDir);
         expect(loaded.length).toBe(2);
     });
 });
 
-describe("removeWatcher", () => {
+describe("removeListener", () => {
     it("removes by ID", async () => {
-        const w1 = await addWatcher(tmpDir, {
+        const l1 = await addListener(tmpDir, {
             entityId: "light.a",
             message: "a",
             oneShot: true,
         });
-        await addWatcher(tmpDir, {
+        await addListener(tmpDir, {
             entityId: "light.b",
             message: "b",
             oneShot: true,
         });
 
-        const removed = await removeWatcher(tmpDir, w1.id);
+        const removed = await removeListener(tmpDir, l1.id);
         expect(removed).toBe(true);
 
-        const loaded = await loadWatchers(tmpDir);
+        const loaded = await loadListeners(tmpDir);
         expect(loaded.length).toBe(1);
         expect(loaded[0]!.entityId).toBe("light.b");
     });
 
     it("returns false for non-existent ID", async () => {
-        const removed = await removeWatcher(tmpDir, "nonexistent");
+        const removed = await removeListener(tmpDir, "nonexistent");
         expect(removed).toBe(false);
     });
 });
 
 // ---- Matching tests ----
 
-describe("matchesWatcher", () => {
-    const base: Watcher = {
+describe("matchesListener", () => {
+    const base: Listener = {
         id: "test",
         entityId: "light.bedroom",
         message: "do something",
@@ -143,42 +143,42 @@ describe("matchesWatcher", () => {
     };
 
     it("matches when entity and basic state change match", () => {
-        expect(matchesWatcher(base, "light.bedroom", "off", "on")).toBe(true);
+        expect(matchesListener(base, "light.bedroom", "off", "on")).toBe(true);
     });
 
     it("does not match different entity", () => {
-        expect(matchesWatcher(base, "light.kitchen", "off", "on")).toBe(false);
+        expect(matchesListener(base, "light.kitchen", "off", "on")).toBe(false);
     });
 
     it("does not match when state unchanged", () => {
-        expect(matchesWatcher(base, "light.bedroom", "on", "on")).toBe(false);
+        expect(matchesListener(base, "light.bedroom", "on", "on")).toBe(false);
     });
 
     it("matches toState filter", () => {
-        const w = { ...base, toState: "on" };
-        expect(matchesWatcher(w, "light.bedroom", "off", "on")).toBe(true);
-        expect(matchesWatcher(w, "light.bedroom", "on", "off")).toBe(false);
+        const l = { ...base, toState: "on" };
+        expect(matchesListener(l, "light.bedroom", "off", "on")).toBe(true);
+        expect(matchesListener(l, "light.bedroom", "on", "off")).toBe(false);
     });
 
     it("matches fromState filter", () => {
-        const w = { ...base, fromState: "off" };
-        expect(matchesWatcher(w, "light.bedroom", "off", "on")).toBe(true);
-        expect(matchesWatcher(w, "light.bedroom", "on", "off")).toBe(false);
+        const l = { ...base, fromState: "off" };
+        expect(matchesListener(l, "light.bedroom", "off", "on")).toBe(true);
+        expect(matchesListener(l, "light.bedroom", "on", "off")).toBe(false);
     });
 
     it("matches both fromState and toState", () => {
-        const w = { ...base, fromState: "off", toState: "on" };
-        expect(matchesWatcher(w, "light.bedroom", "off", "on")).toBe(true);
-        expect(matchesWatcher(w, "light.bedroom", "on", "off")).toBe(false);
-        expect(matchesWatcher(w, "light.bedroom", "unavailable", "on")).toBe(false);
+        const l = { ...base, fromState: "off", toState: "on" };
+        expect(matchesListener(l, "light.bedroom", "off", "on")).toBe(true);
+        expect(matchesListener(l, "light.bedroom", "on", "off")).toBe(false);
+        expect(matchesListener(l, "light.bedroom", "unavailable", "on")).toBe(false);
     });
 });
 
 // ---- Formatting tests ----
 
-describe("formatWatcher", () => {
-    it("formats a one-shot watcher", () => {
-        const w: Watcher = {
+describe("formatListener", () => {
+    it("formats a one-shot listener", () => {
+        const l: Listener = {
             id: "abc123",
             entityId: "light.bedroom",
             toState: "on",
@@ -186,7 +186,7 @@ describe("formatWatcher", () => {
             oneShot: true,
             createdAt: "",
         };
-        const result = formatWatcher(w);
+        const result = formatListener(l);
         expect(result).toContain("abc123");
         expect(result).toContain("light.bedroom");
         expect(result).toContain('"on"');
@@ -194,15 +194,15 @@ describe("formatWatcher", () => {
         expect(result).toContain("commit git");
     });
 
-    it("formats a recurring watcher with no state filter", () => {
-        const w: Watcher = {
+    it("formats a recurring listener with no state filter", () => {
+        const l: Listener = {
             id: "def456",
             entityId: "binary_sensor.door",
             message: "notify me",
             oneShot: false,
             createdAt: "",
         };
-        const result = formatWatcher(w);
+        const result = formatListener(l);
         expect(result).toContain("recurring");
         expect(result).toContain("any state change");
     });

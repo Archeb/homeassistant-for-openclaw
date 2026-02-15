@@ -1,14 +1,14 @@
 /**
- * HA Watcher Service — WebSocket-based event subscription.
+ * HA Listener Service — WebSocket-based event subscription.
  *
  * Connects to Home Assistant's WebSocket API, subscribes to `state_changed`
- * events, and triggers agent actions when watchers match.
+ * events, and triggers agent actions when listeners match.
  *
  * Lifecycle: registered via `api.registerService()`, started/stopped by
  * OpenClaw's plugin service manager.
  */
 
-import { loadWatchers, matchesWatcher, saveWatchers } from "./watcher-store.js";
+import { loadListeners, matchesListener, saveListeners } from "./listener-store.js";
 
 // ---- Types ----
 
@@ -23,12 +23,12 @@ type EnqueueSystemEvent = (text: string, options: { sessionKey: string }) => voi
 
 type ResolveSessionKey = () => string | undefined;
 
-export type WatcherServiceConfig = {
+export type ListenerServiceConfig = {
     /** HA base URL (http://...) */
     url: string;
     /** HA long-lived access token */
     token: string;
-    /** Plugin state directory for loading watchers */
+    /** Plugin state directory for loading listeners */
     stateDir: string;
     /** Logger */
     logger: Logger;
@@ -59,16 +59,16 @@ type HAStateChangedEvent = {
 
 // ---- Service ----
 
-export class HAWatcherService {
+export class HAListenerService {
     private ws: WebSocket | null = null;
     private msgId = 0;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private pingTimer: ReturnType<typeof setInterval> | null = null;
     private reconnectDelay = 1000;
     private stopped = false;
-    private readonly config: WatcherServiceConfig;
+    private readonly config: ListenerServiceConfig;
 
-    constructor(config: WatcherServiceConfig) {
+    constructor(config: ListenerServiceConfig) {
         this.config = config;
     }
 
@@ -107,20 +107,20 @@ export class HAWatcherService {
         const httpUrl = this.config.url.replace(/\/$/, "");
         const wsUrl = httpUrl.replace(/^http/, "ws") + "/api/websocket";
 
-        this.config.logger.info(`[ha-watcher] connecting to ${wsUrl}`);
+        this.config.logger.info(`[ha-listener] connecting to ${wsUrl}`);
 
         try {
             this.ws = new WebSocket(wsUrl);
         } catch (err) {
             this.config.logger.error(
-                `[ha-watcher] WebSocket constructor failed: ${String(err)}`,
+                `[ha-listener] WebSocket constructor failed: ${String(err)}`,
             );
             this.scheduleReconnect();
             return;
         }
 
         this.ws.onopen = () => {
-            this.config.logger.info("[ha-watcher] WebSocket connected");
+            this.config.logger.info("[ha-listener] WebSocket connected");
             this.reconnectDelay = 1000; // reset backoff
         };
 
@@ -130,13 +130,13 @@ export class HAWatcherService {
                 void this.handleMessage(msg);
             } catch (err) {
                 this.config.logger.error(
-                    `[ha-watcher] failed to parse message: ${String(err)}`,
+                    `[ha-listener] failed to parse message: ${String(err)}`,
                 );
             }
         };
 
         this.ws.onclose = () => {
-            this.config.logger.info("[ha-watcher] WebSocket closed");
+            this.config.logger.info("[ha-listener] WebSocket closed");
             this.clearTimers();
             this.ws = null;
             this.scheduleReconnect();
@@ -144,7 +144,7 @@ export class HAWatcherService {
 
         this.ws.onerror = (event) => {
             this.config.logger.error(
-                `[ha-watcher] WebSocket error: ${String(event)}`,
+                `[ha-listener] WebSocket error: ${String(event)}`,
             );
         };
     }
@@ -155,7 +155,7 @@ export class HAWatcherService {
         const delay = this.reconnectDelay;
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
         this.config.logger.info(
-            `[ha-watcher] reconnecting in ${Math.round(delay / 1000)}s`,
+            `[ha-listener] reconnecting in ${Math.round(delay / 1000)}s`,
         );
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
@@ -177,7 +177,7 @@ export class HAWatcherService {
 
             case "auth_ok":
                 this.config.logger.info(
-                    `[ha-watcher] authenticated (HA ${msg.ha_version})`,
+                    `[ha-listener] authenticated (HA ${msg.ha_version})`,
                 );
                 this.subscribeEvents();
                 this.startPing();
@@ -185,7 +185,7 @@ export class HAWatcherService {
 
             case "auth_invalid":
                 this.config.logger.error(
-                    `[ha-watcher] auth failed: ${msg.message}`,
+                    `[ha-listener] auth failed: ${msg.message}`,
                 );
                 // Don't reconnect on auth failure — token is wrong
                 this.stopped = true;
@@ -195,7 +195,7 @@ export class HAWatcherService {
             case "result":
                 if (!msg.success && msg.error) {
                     this.config.logger.error(
-                        `[ha-watcher] command ${msg.id} failed: ${msg.error.message}`,
+                        `[ha-listener] command ${msg.id} failed: ${msg.error.message}`,
                     );
                 }
                 break;
@@ -219,7 +219,7 @@ export class HAWatcherService {
             type: "subscribe_events",
             event_type: "state_changed",
         });
-        this.config.logger.info("[ha-watcher] subscribed to state_changed events");
+        this.config.logger.info("[ha-listener] subscribed to state_changed events");
     }
 
     private startPing(): void {
@@ -238,9 +238,9 @@ export class HAWatcherService {
         const newStateStr = new_state.state;
         if (oldStateStr === newStateStr) return;
 
-        const watchers = await loadWatchers(this.config.stateDir);
-        const matched = watchers.filter((w) =>
-            matchesWatcher(w, entity_id, oldStateStr, newStateStr),
+        const listeners = await loadListeners(this.config.stateDir);
+        const matched = listeners.filter((l) =>
+            matchesListener(l, entity_id, oldStateStr, newStateStr),
         );
 
         if (matched.length === 0) return;
@@ -248,7 +248,7 @@ export class HAWatcherService {
         const sessionKey = this.config.resolveSessionKey();
         if (!sessionKey) {
             this.config.logger.warn(
-                `[ha-watcher] watcher matched for ${entity_id} but no sessionKey available`,
+                `[ha-listener] listener matched for ${entity_id} but no sessionKey available`,
             );
             return;
         }
@@ -257,34 +257,34 @@ export class HAWatcherService {
         const friendlyName =
             (new_state.attributes?.friendly_name as string) ?? entity_id;
 
-        for (const watcher of matched) {
+        for (const listener of matched) {
             const triggerText =
                 `[Home Assistant Event] ${friendlyName} (\`${entity_id}\`) ` +
                 `changed from "${oldStateStr}" to "${newStateStr}".\n` +
-                `Watcher message: ${watcher.message}`;
+                `Listener message: ${listener.message}`;
 
             this.config.logger.info(
-                `[ha-watcher] triggered: ${entity_id} ${oldStateStr}→${newStateStr} → "${watcher.message}"`,
+                `[ha-listener] triggered: ${entity_id} ${oldStateStr}→${newStateStr} → "${listener.message}"`,
             );
 
             try {
                 this.config.enqueueSystemEvent(triggerText, { sessionKey });
             } catch (err) {
                 this.config.logger.error(
-                    `[ha-watcher] failed to enqueue system event: ${String(err)}`,
+                    `[ha-listener] failed to enqueue system event: ${String(err)}`,
                 );
             }
         }
 
-        // Remove one-shot watchers that fired
+        // Remove one-shot listeners that fired
         const firedOneShotIds = new Set(
-            matched.filter((w) => w.oneShot).map((w) => w.id),
+            matched.filter((l) => l.oneShot).map((l) => l.id),
         );
         if (firedOneShotIds.size > 0) {
-            const remaining = watchers.filter((w) => !firedOneShotIds.has(w.id));
-            await saveWatchers(this.config.stateDir, remaining);
+            const remaining = listeners.filter((l) => !firedOneShotIds.has(l.id));
+            await saveListeners(this.config.stateDir, remaining);
             this.config.logger.info(
-                `[ha-watcher] removed ${firedOneShotIds.size} one-shot watcher(s)`,
+                `[ha-listener] removed ${firedOneShotIds.size} one-shot listener(s)`,
             );
         }
     }
