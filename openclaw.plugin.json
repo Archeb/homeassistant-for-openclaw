@@ -1,0 +1,68 @@
+{
+    "id": "homeassistant",
+    "name": "Home Assistant",
+    "description": "Home Assistant integration: live sensor context injection, entity control, and logbook access.",
+    "version": "0.1.0",
+    "skills": [
+        "skills/homeassistant"
+    ],
+    "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "Home Assistant base URL (e.g. http://homeassistant.local:8123)"
+            },
+            "token": {
+                "type": "string",
+                "description": "Home Assistant Long-Lived Access Token"
+            },
+            "context": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "entityPatterns": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "*"
+                        ]
+                    },
+                    "maxEntities": {
+                        "type": "integer",
+                        "default": 50
+                    },
+                    "groupByArea": {
+                        "type": "boolean",
+                        "default": true
+                    }
+                }
+            },
+            "acl": {
+                "type": "object",
+                "properties": {
+                    "blockedEntities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": []
+                    },
+                    "writableDomains": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": []
+                    }
+                }
+            }
+        }
+    }
+}

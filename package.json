@@ -1,0 +1,22 @@
+{
+    "name": "homeassistant-for-openclaw",
+    "version": "0.1.0",
+    "description": "Home Assistant integration plugin for OpenClaw — sensor context, device control, and logbook access.",
+    "type": "module",
+    "main": "src/index.ts",
+    "license": "Apache-2.0",
+    "scripts": {
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "peerDependencies": {
+        "openclaw": "*"
+    },
+    "devDependencies": {
+        "openclaw": "*",
+        "typescript": "^5.7.0",
+        "vitest": "^3.0.0"
+    },
+    "openclaw": {}
+}
